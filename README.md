@@ -47,9 +47,13 @@ Cache reuse is a preference on close calls, not a provider cache-hit guarantee.
 All Jev work shares one two-second deadline with no retries. Timeout, cancellation,
 HTTP failure, malformed answers and invalid decisions retain existing settings.
 Late Jev responses cannot apply after timeout, cancellation, off or session replacement.
-Pi's asynchronous `setModel` call is a host operation; its authentication and event
-handlers are not cancellable through the extension API. The Jev deadline does not
-guarantee an upper bound on that host call.
+After validation, the Jev deadline is cleared and the router awaits Pi's
+`setModel` host operation. This exception to the
+original total-routing deadline was explicitly approved for TECH-2386.
+Pi's authentication and model-selection event handlers are not cancellable through
+the extension API: an already-started host switch can finish after cancellation or
+exceed two seconds. Ownership/cancellation guards prevent a subsequent stale effort
+change; they cannot undo that host switch.
 
 ## Configuration
 

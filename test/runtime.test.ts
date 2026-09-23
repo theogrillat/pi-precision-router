@@ -367,3 +367,15 @@ for (const key of ["toString", "constructor", "__proto__"]) {
     assert.deepEqual(h.settings(), ["claude-opus-5-5", "high"]);
   });
 }
+
+test("awaits a host model switch beyond the Jev deadline", async (t) => {
+  const h = await harness(t);
+  const commit = h.pi.setModel;
+  h.pi.setModel = async (model) => {
+    await new Promise((resolve) => setTimeout(resolve, 2100));
+    return commit(model);
+  };
+  await h.emit("turn_start");
+  assert.deepEqual(h.settings(), ["gpt-6-astra", "medium"]);
+  assert.equal(h.requests.length, 1);
+});

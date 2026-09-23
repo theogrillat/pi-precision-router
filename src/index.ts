@@ -141,6 +141,7 @@ export default function precisionRouter(pi: ExtensionAPI): void {
       if (!clearChoice(decision.effort))
         throw new Error("uncertain reasoning effort");
       signal.throwIfAborted();
+      clearTimeout(timer);
       if (effective !== previousModel && !(await pi.setModel(effective)))
         throw new Error("model switch rejected");
       if (
