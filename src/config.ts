@@ -10,10 +10,12 @@ export interface Profile {
 export interface Config {
   models: Profile[];
   preferences: string;
+  apiKey: string;
   apiKeyEnv: string;
   jevModel: string;
 }
 export const defaults: Config = {
+  apiKey: "",
   apiKeyEnv: "TYPESAFE_API_KEY",
   jevModel: "jev-latest",
   preferences:
@@ -74,7 +76,12 @@ export function loadConfig(cwd: string): Config {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
       throw error;
     }
-    const patch = JSON.parse(raw);
+    let patch;
+    try {
+      patch = JSON.parse(raw);
+    } catch {
+      throw new Error("Invalid router configuration JSON");
+    }
     if (
       !patch ||
       typeof patch !== "object" ||
@@ -85,6 +92,8 @@ export function loadConfig(cwd: string): Config {
     config = { ...(config as Config), ...patch };
   }
   const c = config as Config;
+  if (typeof c.apiKey !== "string")
+    throw new Error("Invalid API key configuration");
   if (
     ![c.apiKeyEnv, c.jevModel, c.preferences].every(
       (value) =>

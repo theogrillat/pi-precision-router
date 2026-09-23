@@ -379,3 +379,28 @@ test("awaits a host model switch beyond the Jev deadline", async (t) => {
   assert.deepEqual(h.settings(), ["gpt-6-astra", "medium"]);
   assert.equal(h.requests.length, 1);
 });
+
+test("uses trimmed config API key before environment, with blank-key fallback", async (t) => {
+  const h = await harness(t);
+  const root = mkdtempSync(join(tmpdir(), "precision-key-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  process.env.PI_CODING_AGENT_DIR = root;
+  const path = join(root, "pi-precision-router.json");
+  const authorizations: unknown[] = [];
+  t.mock.method(globalThis, "fetch", async (_url: unknown, options: any) => {
+    authorizations.push(options.headers.Authorization);
+    assert.ok(!options.body.includes("saved-secret"));
+    return {
+      ok: true,
+      json: async () => answer(JSON.parse(options.body), undefined, "hold"),
+    };
+  });
+  writeFileSync(path, JSON.stringify({ apiKey: "  saved-secret  " }));
+  await h.emit("turn_start");
+  writeFileSync(path, JSON.stringify({ apiKey: "  " }));
+  await h.emit("turn_start");
+  assert.deepEqual(authorizations, ["Bearer saved-secret", "Bearer test-key"]);
+  writeFileSync(path, '{"apiKey": "saved-secret", broken}');
+  await h.emit("turn_start");
+  assert.ok(h.warnings.every((message) => !message.includes("saved-secret")));
+});

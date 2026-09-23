@@ -78,8 +78,12 @@ invalid values, empty/duplicate rosters and malformed JSON fail closed for routi
 }
 ```
 
-The endpoint is fixed to `https://api.typesafe.ai/v1/systemone`. Credentials are
-read from the named environment variable, never put in routing state or reports.
+The endpoint is fixed to `https://api.typesafe.ai/v1/systemone`. A nonblank `apiKey` in configuration takes precedence over the environment variable
+named by `apiKeyEnv` (default `TYPESAFE_API_KEY`). Both values are trimmed; a blank
+configured key falls back to the environment. For example, put
+`{"apiKey": "your-key"}` in `~/.pi/agent/pi-precision-router.json`. Keep this file
+private (permissions `0600`) and never commit it. Credentials are never put in
+routing state or reports. Malformed configuration errors omit file contents.
 Missing models are warned about and excluded, never silently substituted.
 Only exact configured, available provider/model pairs can be selected.
 
