@@ -9,6 +9,7 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import router from "../src/index.ts";
+import { fixtureConfig } from "./fixtures.ts";
 
 const opus = getModel("anthropic", "claude-opus-5-5")!;
 const astra = getModel("openai-codex", "gpt-6-astra")!;
@@ -45,6 +46,13 @@ function answer(
 }
 
 async function harness(t: any, available = [opus, astra]) {
+  const cwd = mkdtempSync(join(tmpdir(), "precision-runtime-"));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  mkdirSync(join(cwd, ".pi"));
+  writeFileSync(
+    join(cwd, ".pi", "pi-precision-router.json"),
+    JSON.stringify(fixtureConfig),
+  );
   let model: typeof opus | typeof astra = opus;
   let effort = "high";
   const handlers = new Map<string, Function>();
@@ -74,7 +82,7 @@ async function harness(t: any, available = [opus, astra]) {
     process.env = previousEnv;
   });
   const ctx = {
-    cwd: "/nonexistent/precision-router-test",
+    cwd,
     hasUI: true,
     get model() {
       return model;
@@ -271,6 +279,7 @@ test("project replaces the roster and overrides global preferences, invalid conf
   writeFileSync(
     join(root, "pi-precision-router.json"),
     JSON.stringify({
+      ...fixtureConfig,
       preferences: "global preference",
       apiKeyEnv: "TEST_JEV_KEY",
     }),
@@ -286,6 +295,7 @@ test("project replaces the roster and overrides global preferences, invalid conf
           provider: "openai-codex",
           id: "gpt-6-astra",
           description: "Project-specific Astra",
+          effortMap: fixtureConfig.models[0].effortMap,
         },
       ],
     }),
@@ -475,4 +485,61 @@ test("testing feedback reports switched, held and rejected decisions without ded
   h.ctx.hasUI = false;
   await h.emit("turn_start");
   assert.equal(h.warnings.length, count + 1);
+});
+
+test("routes a custom provider using arbitrary configured effort labels and mappings", async (t) => {
+  const custom = { ...opus, provider: "custom-provider", id: "local-reasoner" };
+  const simple = {
+    ...opus,
+    provider: "custom-provider",
+    id: "local-simple",
+    reasoning: false,
+  };
+  const h = await harness(t, [custom, simple]);
+  const config = {
+    efforts: { quick: "Simple task", deep: "Complex task" },
+    models: [
+      {
+        provider: custom.provider,
+        id: custom.id,
+        description: "Custom reasoner",
+        effortMap: { quick: "low", deep: "high" },
+      },
+      {
+        provider: simple.provider,
+        id: simple.id,
+        description: "No reasoning",
+        effortMap: { quick: "off", deep: "off" },
+      },
+    ],
+  };
+  writeFileSync(
+    join(h.ctx.cwd, ".pi", "pi-precision-router.json"),
+    JSON.stringify(config),
+  );
+  h.respond((body) =>
+    answer(body, "custom-provider/local-reasoner", "hold", "deep"),
+  );
+  await h.emit("turn_start");
+  assert.deepEqual(h.settings(), ["local-reasoner", "high"]);
+  assert.deepEqual(h.requests[0].questions.effort.criteria, config.efforts);
+  h.respond((body) =>
+    answer(body, "custom-provider/local-simple", "hold", "quick"),
+  );
+  await h.emit("turn_start");
+  assert.deepEqual(h.settings(), ["local-simple", "off"]);
+});
+
+test("unsupported configured native effort cannot switch model or silently remap", async (t) => {
+  const h = await harness(t);
+  const config = structuredClone(fixtureConfig);
+  config.models[1].effortMap.low = "off";
+  writeFileSync(
+    join(h.ctx.cwd, ".pi", "pi-precision-router.json"),
+    JSON.stringify(config),
+  );
+  h.respond((body) => answer(body, undefined, "hold", "low"));
+  await h.emit("turn_start");
+  assert.deepEqual(h.settings(), ["claude-opus-5-5", "high"]);
+  assert.match(h.warnings.at(-1)!, /mapping low → off is unsupported/);
 });

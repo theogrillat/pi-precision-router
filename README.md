@@ -6,6 +6,10 @@ Quality-first concrete-model routing before each main-agent step in Pi.
 
 Requires Pi 0.87.1+ and Node 22.19+ (development tested on Node 24).
 
+First create your routing configuration as described below. There are no built-in
+model or effort rosters. Missing configuration leaves your current settings unchanged
+and emits a setup warning.
+
 ```sh
 npm ci --ignore-scripts
 export TYPESAFE_API_KEY=...
@@ -36,7 +40,7 @@ the follow-up after tool calls. It does not route tools, nested Jev evaluation o
 idle cache warming. One HTTP evaluation contains three independent Choice questions:
 
 1. **Model**: actual configured, available model IDs and curated descriptions.
-2. **Effort**: exactly low, medium, high or xhigh; never off, minimal or max.
+2. **Effort**: the labels and descriptions in your configured `efforts` roster.
 3. **Benefit**: hold, or a specific model with meaningful quality gain, or a
    specific model with substantial speed gain while quality is preserved.
 
@@ -47,15 +51,12 @@ current-model or prompt-cache preference. Quality improvements are not capped
 by dollars or estimated cache cost.
 
 The top valid effort choice is also applied every step, without confidence,
-probability or margin thresholds. Use the named native level when supported;
-otherwise map to the nearest supported non-max level, choosing higher on ties.
-Models without reasoning map to `off`. Notifications explain adaptations.
-
-In the current Pi registry, all six default models (Luna, Sol, Astra, Opus 5.5,
-Fable 5.1 and Sonnet 5) support all four named levels, so their mappings are
-identity mappings: low → low, medium → medium, high → high, xhigh → xhigh.
-Sol is reasoning-capable; its additional support for `off` does not cause the
-router to select `off`. Mapping uses each model's live Pi capability metadata.
+probability or margin thresholds. The selected model's `effortMap` translates the
+choice into a Pi thinking level. There is no implicit nearest-level mapping.
+The mapped level must be supported by that model according to Pi's live registry;
+an unsupported mapping rejects the decision before any settings change. `max`
+is never a valid mapping target. For models without reasoning, map every label
+to `off`. Notifications show both the configured choice and effective native level.
 
 All Jev work shares one two-second deadline with no retries. Timeout, cancellation,
 HTTP failure, malformed answers and invalid decisions retain existing settings.
@@ -72,20 +73,39 @@ change; they cannot undo that host switch.
 
 Defaults → global `~/.pi/agent/pi-precision-router.json` → project
 `<cwd>/.pi/pi-precision-router.json`. `PI_CODING_AGENT_DIR` overrides the global
-directory. Fields replace earlier values; `models` replaces the whole array, not
-individual entries. Configuration is read on each turn. Unknown top-level fields,
+directory. Fields replace earlier values: `models` replaces the whole array, and
+`efforts` replaces the whole object. Update both together when renaming effort
+labels. Configuration is read on each turn. Unknown top-level/model fields,
 invalid values, empty/duplicate rosters and malformed JSON fail closed for routing.
+
+Define 1–24 models and 1–12 effort choices. Labels are lowercase identifiers
+(letters, digits, `_`, `-`; start with a letter; at most 32 characters; no prototype
+names). Descriptions are nonempty strings, at most 2,000 characters each. Every
+model must map exactly those labels to Pi native levels: `off`, `minimal`, `low`,
+`medium`, `high` or `xhigh`. Multiple labels may map to the same native level.
+
+Start from [the neutral example](examples/pi-precision-router.json). Replace its
+placeholder provider/model IDs with models registered and authenticated in Pi
+(`pi --list-models`), then describe their capabilities and supported effort mappings.
+The example is not an installed or automatically selected roster.
 
 ```json
 {
   "apiKeyEnv": "TYPESAFE_API_KEY",
   "jevModel": "jev-latest",
   "preferences": "Prefer concise explanations and tightly scoped code changes.",
+  "efforts": {
+    "low": "Straightforward work",
+    "medium": "Several reasoning steps",
+    "high": "Difficult reasoning",
+    "xhigh": "Hardest engineering problems"
+  },
   "models": [
     {
-      "provider": "anthropic",
-      "id": "claude-opus-5-5",
-      "description": "My default for substantive coding."
+      "provider": "your-provider",
+      "id": "your-model",
+      "description": "Describe this model's strengths, limitations and speed.",
+      "effortMap": { "low": "low", "medium": "medium", "high": "high", "xhigh": "high" }
     }
   ]
 }
@@ -93,27 +113,26 @@ invalid values, empty/duplicate rosters and malformed JSON fail closed for routi
 
 The endpoint is fixed to `https://api.typesafe.ai/v1/systemone`. A nonblank `apiKey` in configuration takes precedence over the environment variable
 named by `apiKeyEnv` (default `TYPESAFE_API_KEY`). Both values are trimmed; a blank
-configured key falls back to the environment. For example, put
-`{"apiKey": "your-key"}` in `~/.pi/agent/pi-precision-router.json`. Keep this file
+configured key falls back to the environment. Add `"apiKey": "your-key"` to your
+complete `~/.pi/agent/pi-precision-router.json` configuration. Keep this file
 private (permissions `0600`) and never commit it. Credentials are never put in
 routing state or reports. Malformed configuration errors omit file contents.
 Missing models are warned about and excluded, never silently substituted.
 Only exact configured, available provider/model pairs can be selected.
 
-Initial IDs were verified with the installed `pi --list-models` registry:
+The router contains no provider-specific model IDs, capability descriptions or
+effort equivalences. Pi owns provider authentication and native API translation;
+custom providers work when registered in Pi with accurate capability metadata.
+Jev evaluation still uses TypeSafe, independently of your inference providers.
 
-| Provider | Model | User preference |
-| --- | --- | --- |
-| openai-codex | gpt-6-luna | Extremely fast/cheap, weak reasoning; genuinely trivial work |
-| openai-codex | gpt-6-sol | Opus-like general capability; routine discussion, clear concise explanations; less-preferred code |
-| openai-codex | gpt-6-astra | Top general-purpose choice; demanding discussion and nuanced reasoning; less strong than Fable at hardest coding |
-| anthropic | claude-opus-5-5 | Default substantive coding; improved speed/verbosity reports are provisional |
-| anthropic | claude-fable-5-1 | Hardest engineering; strong code, slower and more verbose |
-| anthropic | claude-sonnet-5 | Fast straightforward work, between Luna and Opus; limited personal experience |
+### Migrating an existing installation
 
-Profiles are user observations, not verified benchmarks or hidden ordered tiers.
-Anthropic is generally preferred for code and scope adherence; OpenAI for speed,
-low verbosity and readability. Edit the descriptions to reflect your experience.
+Older versions shipped a personal six-model roster. Before upgrading, copy your
+effective model list and preferences into the global or project config, add the
+`efforts` descriptions, and add an explicit `effortMap` to every model. To preserve
+the previous four-level behavior on models supporting all four levels, use
+`{"low":"low","medium":"medium","high":"high","xhigh":"xhigh"}`.
+There is no silent fallback to the old roster. API key configuration is unchanged.
 
 ## Context and privacy
 

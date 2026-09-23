@@ -6,9 +6,11 @@ export interface Profile {
   provider: string;
   id: string;
   description: string;
+  effortMap: Record<string, string>;
 }
 export interface Config {
   models: Profile[];
+  efforts: Record<string, string>;
   preferences: string;
   notifyDecisions: boolean;
   apiKey: string;
@@ -21,45 +23,9 @@ export const defaults: Config = {
   apiKeyEnv: "TYPESAFE_API_KEY",
   jevModel: "jev-latest",
   preferences:
-    "User observations, not benchmarks: Anthropic adheres more closely to boundaries and scope and produces preferred code. OpenAI is generally faster, less verbose and easier to read. These are contextual preferences, not rigid task mappings.",
-  models: [
-    {
-      provider: "openai-codex",
-      id: "gpt-6-luna",
-      description:
-        "Extremely fast and cheap but weak intelligence and reasoning. Genuinely trivial or mechanical work.",
-    },
-    {
-      provider: "openai-codex",
-      id: "gpt-6-sol",
-      description:
-        "Opus-like general capability in user experience, lower verbosity and clearer explanations, less-preferred code than Opus. Routine explanation and discussion relative to Astra.",
-    },
-    {
-      provider: "openai-codex",
-      id: "gpt-6-astra",
-      description:
-        "Top general-purpose choice: frontier intelligence, concise and easy to read. Demanding discussion, nuanced reasoning and explanation. Less strong than Fable on really hard coding.",
-    },
-    {
-      provider: "anthropic",
-      id: "claude-opus-5-5",
-      description:
-        "Default for substantive coding; preferred code output. Newly released: reports of lower verbosity and better speed than previous Opus are provisional, not established user observations.",
-    },
-    {
-      provider: "anthropic",
-      id: "claude-fable-5-1",
-      description:
-        "Hardest coding and engineering problems; strong code output with verbosity and speed disadvantages relative to the OpenAI choices.",
-    },
-    {
-      provider: "anthropic",
-      id: "claude-sonnet-5",
-      description:
-        "Fast and reasonably intelligent for straightforward problems; middle ground between Luna and Opus. Limited personal usage so far.",
-    },
-  ],
+    "Prioritize correctness and scope adherence, then speed and clarity.",
+  models: [],
+  efforts: {},
 };
 export const modelKey = (model: { provider: string; id: string }) =>
   `${model.provider}/${model.id}`;
@@ -109,19 +75,55 @@ export function loadConfig(cwd: string): Config {
     throw new Error("Invalid router configuration");
   if (!Array.isArray(c.models) || !c.models.length || c.models.length > 24)
     throw new Error("Configure 1–24 models");
+  if (
+    !isRecord(c.efforts) ||
+    !Object.keys(c.efforts).length ||
+    Object.keys(c.efforts).length > 12
+  )
+    throw new Error("Configure 1–12 effort choices");
+  for (const [label, description] of Object.entries(c.efforts)) {
+    if (
+      !/^[a-z][a-z0-9_-]{0,31}$/.test(label) ||
+      label in Object.prototype ||
+      !validText(description)
+    )
+      throw new Error("Invalid effort choice");
+  }
   for (const m of c.models) {
     if (
-      !m ||
-      ![m.provider, m.id, m.description].every(
-        (value) =>
-          typeof value === "string" &&
-          value.trim().length > 0 &&
-          value.length <= 2000,
-      )
+      !isRecord(m) ||
+      Object.keys(m).some(
+        (key) => !["provider", "id", "description", "effortMap"].includes(key),
+      ) ||
+      ![m.provider, m.id, m.description].every(validText)
     )
       throw new Error("Invalid model profile");
+    if (
+      !isRecord(m.effortMap) ||
+      Object.keys(m.effortMap).length !== Object.keys(c.efforts).length ||
+      Object.keys(c.efforts).some(
+        (label) =>
+          !Object.hasOwn(m.effortMap, label) ||
+          !["off", "minimal", "low", "medium", "high", "xhigh"].includes(
+            m.effortMap[label],
+          ),
+      )
+    )
+      throw new Error(
+        "Each model needs an explicit non-max native mapping for every effort choice",
+      );
   }
   if (new Set(c.models.map(modelKey)).size !== c.models.length)
     throw new Error("Duplicate model profile");
   return c;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function validText(value: unknown): value is string {
+  return (
+    typeof value === "string" && value.trim().length > 0 && value.length <= 2000
+  );
 }

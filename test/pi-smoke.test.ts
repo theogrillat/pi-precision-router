@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type, type AssistantMessage } from "@earendil-works/pi-ai";
@@ -14,9 +14,14 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import router from "../src/index.ts";
+import { fixtureConfig } from "./fixtures.ts";
 
 test("real Pi requests switch at the upcoming boundary across tool rounds, then hold", async (t) => {
   const cwd = mkdtempSync(join(tmpdir(), "precision-smoke-"));
+  writeFileSync(
+    join(cwd, "pi-precision-router.json"),
+    JSON.stringify(fixtureConfig),
+  );
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
   const env = process.env;
   process.env = {

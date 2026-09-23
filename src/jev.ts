@@ -72,14 +72,8 @@ export function buildRequest(
       },
       effort: {
         type: "choice",
-        instructions: `${policy} Independently of model selection, choose low, medium, high or xhigh reasoning effort for this next step. Favor higher effort only when likely quality gain warrants slowdown. The top effort choice is always applied regardless of confidence. Code uses the named native level when supported, otherwise the nearest supported non-max level on the selected model; models without reasoning use off.`,
-        criteria: {
-          low: "Routine straightforward work.",
-          medium: "Several meaningful reasoning steps.",
-          high: "Difficult reasoning where the quality benefit warrants latency.",
-          xhigh:
-            "The hardest reasoning or engineering problems requiring the greatest non-max effort.",
-        },
+        instructions: `${policy} Independently of model selection, choose the configured effort whose description best fits this next step. Favor more effort only when likely quality gain warrants slowdown. The top effort choice is always applied regardless of confidence, using the selected model's explicit configured native effort mapping.`,
+        criteria: config.efforts,
       },
       benefit: {
         type: "choice",

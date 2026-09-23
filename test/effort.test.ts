@@ -1,21 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { supportedEffort } from "../src/effort.ts";
+import { mappedEffort } from "../src/effort.ts";
 
-for (const [requested, supported, expected] of [
-  ["xhigh", ["off", "low", "medium", "high"], "high"],
-  ["low", ["off", "minimal", "low", "high"], "low"],
-  ["medium", ["off"], "off"],
-  ["medium", ["low", "high"], "high"],
-  ["max", ["low", "high", "max"], "high"],
-  ["medium", ["low", "medium", "high"], "medium"],
-] as const) {
-  test(`maps ${requested} onto ${supported.join("/")} as ${expected}`, () => {
-    assert.equal(supportedEffort(requested, supported), expected);
-  });
-}
+test("uses explicit mappings rather than nearest-level inference", () => {
+  assert.equal(mappedEffort("deep", { deep: "high" }, ["low", "high"]), "high");
+  assert.equal(
+    mappedEffort("xhigh", { xhigh: "medium" }, ["medium", "high", "xhigh"]),
+    "medium",
+  );
+  assert.equal(mappedEffort("deep", { deep: "off" }, ["off"]), "off");
+});
 
-test("rejects invalid effort domains instead of selecting max", () => {
-  assert.throws(() => supportedEffort("high", ["max"]));
-  assert.throws(() => supportedEffort("invented", ["low"]));
+test("rejects missing, unsupported, inherited and max mappings", () => {
+  assert.throws(() => mappedEffort("high", {}, ["high"]));
+  assert.throws(() => mappedEffort("deep", { deep: "high" }, ["low"]));
+  assert.throws(() => mappedEffort("deep", { deep: "max" }, ["max"]));
+  assert.throws(() =>
+    mappedEffort("deep", Object.create({ deep: "high" }), ["high"]),
+  );
 });

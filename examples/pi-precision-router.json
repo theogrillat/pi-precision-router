@@ -1,0 +1,34 @@
+{
+  "apiKeyEnv": "TYPESAFE_API_KEY",
+  "preferences": "Prioritize correctness and scope adherence, then speed and clarity.",
+  "efforts": {
+    "low": "Straightforward work",
+    "medium": "Several reasoning steps",
+    "high": "Difficult reasoning",
+    "xhigh": "Hardest engineering problems"
+  },
+  "models": [
+    {
+      "provider": "your-provider",
+      "id": "your-reasoning-model",
+      "description": "Describe this model's strengths, limitations and speed based on your experience.",
+      "effortMap": {
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": "high"
+      }
+    },
+    {
+      "provider": "your-provider",
+      "id": "your-non-reasoning-model",
+      "description": "A fast model without configurable reasoning, for simple tasks.",
+      "effortMap": {
+        "low": "off",
+        "medium": "off",
+        "high": "off",
+        "xhigh": "off"
+      }
+    }
+  ]
+}

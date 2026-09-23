@@ -4,7 +4,7 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { loadConfig, modelKey } from "./config.ts";
-import { supportedEffort } from "./effort.ts";
+import { mappedEffort } from "./effort.ts";
 import { buildRequest, evaluate, excerpt, parseDecision } from "./jev.ts";
 
 export default function precisionRouter(pi: ExtensionAPI): void {
@@ -136,8 +136,14 @@ export default function precisionRouter(pi: ExtensionAPI): void {
       const effective = available.find((model) => modelKey(model) === proposed);
       if (!effective) throw new Error("selected model unavailable");
       const requestedEffort = decision.effort.choice;
-      const effort = supportedEffort(
+      const profile = profiles.find(
+        (profile) => modelKey(profile) === proposed,
+      );
+      if (!profile)
+        throw new Error("Selected model is outside the configured roster");
+      const effort = mappedEffort(
         requestedEffort,
+        profile.effortMap,
         getSupportedThinkingLevels(effective),
       );
       if (effort !== requestedEffort)
