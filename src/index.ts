@@ -4,6 +4,7 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { loadConfig, modelKey } from "./config.ts";
+import { supportedEffort } from "./effort.ts";
 import {
   buildRequest,
   clearChoice,
@@ -134,33 +135,25 @@ export default function precisionRouter(pi: ExtensionAPI): void {
       const decision = parseDecision(raw, request);
       const proposed = decision.model.choice;
       proposal = `${proposed} · ${decision.effort.choice} (confidence model ${decision.model.confidence.toFixed(2)}, effort ${decision.effort.confidence.toFixed(2)}) · benefit: ${decision.benefit.choice} (${decision.benefit.confidence.toFixed(2)})`;
-      const switchModel =
-        clearChoice(decision.model) &&
-        clearChoice(decision.benefit) &&
-        (decision.benefit.choice === `quality:${proposed}` ||
-          decision.benefit.choice === `speed:${proposed}`);
-      reason = "model and benefit selections disagree";
-      if (switchModel) reason = "clear matching model-specific benefit";
-      else if (proposed === modelKey(previousModel))
-        reason = "selected model already active";
-      else if (!clearChoice(decision.model))
-        reason = "model choice below switching thresholds";
-      else if (!clearChoice(decision.benefit))
-        reason = "switching benefit below thresholds";
-      else if (decision.benefit.choice === "hold")
-        reason = "no meaningful switching benefit";
-      const effective = switchModel
-        ? available.find((model) => modelKey(model) === proposed)
-        : previousModel;
+      reason =
+        proposed === modelKey(previousModel)
+          ? "top model already active"
+          : "following top model choice; benefit is advisory";
+      const effective = available.find((model) => modelKey(model) === proposed);
       if (!effective) throw new Error("selected model unavailable");
-      const effort = decision.effort.choice;
-      const supported = getSupportedThinkingLevels(effective);
-      if (!supported.some((level) => level === effort))
-        throw new Error(
-          `unsupported effort ${effort} for ${effective.id}; supported: ${supported.filter((level) => level !== "max").join(", ")}`,
-        );
-      if (!clearChoice(decision.effort))
-        throw new Error("uncertain reasoning effort");
+      const effortIsClear = clearChoice(decision.effort);
+      const requestedEffort = effortIsClear
+        ? decision.effort.choice
+        : previousEffort;
+      const effort = supportedEffort(
+        requestedEffort,
+        getSupportedThinkingLevels(effective),
+      );
+      if (!effortIsClear)
+        reason +=
+          "; uncertain effort: retaining previous level where supported";
+      if (effort !== requestedEffort)
+        reason += `; effort adapted ${requestedEffort} → ${effort}`;
       signal.throwIfAborted();
       clearTimeout(timer);
       if (effective !== previousModel && !(await pi.setModel(effective)))

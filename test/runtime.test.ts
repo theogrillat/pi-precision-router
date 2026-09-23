@@ -44,7 +44,7 @@ function answer(
 }
 
 async function harness(t: any) {
-  let model = opus;
+  let model: typeof opus | typeof astra = opus;
   let effort = "high";
   const handlers = new Map<string, Function>();
   const commands = new Map<string, any>();
@@ -97,7 +97,7 @@ async function harness(t: any) {
     setThinkingLevel: (value: string) => {
       effort = value;
     },
-    setModel: async (value: typeof opus) => {
+    setModel: async (value: typeof model) => {
       model = value;
       return true;
     },
@@ -147,14 +147,12 @@ test("routes each model step with one three-question request and recent tool evi
   assert.match(JSON.stringify(h.requests[1].state), /Respect scope/);
 });
 
-test("holds close decisions but updates supported effort; permits quality-preserving speed switches", async (t) => {
+test("selects the top model even when the benefit verdict is hold", async (t) => {
   const h = await harness(t);
   h.respond((body) => answer(body, undefined, "hold", "medium"));
   await h.emit("turn_start");
-  assert.deepEqual(h.settings(), ["claude-opus-5-5", "medium"]);
-  h.respond((body) =>
-    answer(body, undefined, "speed:openai-codex/gpt-6-astra", "high"),
-  );
+  assert.deepEqual(h.settings(), ["gpt-6-astra", "medium"]);
+  h.respond((body) => answer(body, undefined, "hold", "high"));
   await h.emit("turn_start");
   assert.deepEqual(h.settings(), ["gpt-6-astra", "high"]);
 });
@@ -176,13 +174,7 @@ test("off prevents requests; on and new sessions resume; manual selection does n
   assert.equal(h.requests.length, 2);
 });
 
-for (const scenario of [
-  "network",
-  "malformed",
-  "unknown-model",
-  "max",
-  "unsupported",
-]) {
+for (const scenario of ["network", "malformed", "unknown-model", "max"]) {
   test(`${scenario} preserves both settings`, async (t) => {
     const h = await harness(t);
     h.respond((body) => {
@@ -310,15 +302,47 @@ test("project replaces the roster and overrides global preferences, invalid conf
   assert.deepEqual(h.settings(), ["gpt-6-astra", "medium"]);
 });
 
-test("uncertain or contradictory model-specific benefits cannot justify switching", async (t) => {
+test("low confidence and close model probabilities do not veto the top model", async (t) => {
   const h = await harness(t);
   h.respond((body) => {
-    const response = answer(body);
+    const response = answer(body, undefined, "hold");
+    response.answers.model.confidence = 0.2;
+    response.answers.model.probabilities = {
+      "openai-codex/gpt-6-astra": 0.51,
+      "anthropic/claude-opus-5-5": 0.49,
+    };
     response.answers.benefit.confidence = 0.2;
+    response.answers.effort.confidence = 0.2;
     return response;
   });
   await h.emit("turn_start");
-  assert.deepEqual(h.settings(), ["claude-opus-5-5", "medium"]);
+  assert.deepEqual(h.settings(), ["gpt-6-astra", "high"]);
+});
+
+test("maps confident off to the selected model's minimum supported effort", async (t) => {
+  const h = await harness(t);
+  h.respond((body) => answer(body, undefined, "hold", "off"));
+  await h.emit("turn_start");
+  assert.deepEqual(h.settings(), ["gpt-6-astra", "minimal"]);
+  h.respond((body) => answer(body, "anthropic/claude-opus-5-5", "hold", "off"));
+  await h.emit("turn_start");
+  assert.deepEqual(h.settings(), ["claude-opus-5-5", "low"]);
+});
+
+test("uncertain effort is preserved where supported and adapted where not", async (t) => {
+  const h = await harness(t);
+  await h.pi.setModel(astra);
+  h.pi.setThinkingLevel("minimal");
+  h.respond((body) => {
+    const response = answer(body, "anthropic/claude-opus-5-5", "hold", "high");
+    response.answers.effort.confidence = 0.2;
+    return response;
+  });
+  await h.emit("turn_start");
+  assert.deepEqual(h.settings(), ["claude-opus-5-5", "low"]);
+  h.pi.setThinkingLevel("max");
+  await h.emit("turn_start");
+  assert.deepEqual(h.settings(), ["claude-opus-5-5", "xhigh"]);
 });
 
 for (const interrupt of ["off", "session", "abort"]) {
@@ -418,11 +442,11 @@ test("testing feedback reports switched, held and rejected decisions without ded
   h.respond((body) => answer(body, undefined, "hold"));
   await h.emit("turn_start");
   assert.match(h.warnings.at(-1)!, /held.*gpt-6-astra.*medium/s);
-  h.respond((body) => answer(body, undefined, "hold", "off"));
+  h.respond((body) => answer(body, undefined, "hold", "max"));
   await h.emit("turn_start");
   assert.match(
     h.warnings.at(-1)!,
-    /rejected.*gpt-6-astra.*medium.*proposed:.*off.*unsupported effort/s,
+    /rejected.*gpt-6-astra.*medium.*Malformed Jev decision/s,
   );
   const count = h.warnings.length;
   await h.emit("turn_start");

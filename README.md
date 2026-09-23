@@ -40,16 +40,19 @@ idle cache warming. One HTTP evaluation contains three independent Choice questi
 3. **Benefit**: hold, or a specific model with meaningful quality gain, or a
    specific model with substantial speed gain while quality is preserved.
 
-The benefit question does not consume the model question's answer. Code switches
-only when both independently name the same alternative. A clear choice needs
-confidence >= 0.6, winning probability >= 0.7 and runner-up margin >= 0.2.
-These are conservative initial thresholds, not empirically calibrated guarantees.
-Close, uncertain or disagreeing model/benefit choices hold the model. A supported
-effort update can still apply. Effort is validated against the model actually used;
-unsupported or uncertain effort rejects the entire decision before mutation.
+The top valid model choice is applied directly each step, with no confidence,
+winning-probability or margin threshold. The independent benefit verdict is
+advisory only: even `hold` does not veto a different model choice. There is no
+current-model or prompt-cache preference. Quality improvements are not capped
+by dollars or estimated cache cost.
 
-Quality improvements are not capped by dollars or estimated cache cost.
-Cache reuse is a preference on close calls, not a provider cache-hit guarantee.
+Effort remains independent. A clear effort choice needs confidence >= 0.6,
+winning probability >= 0.7 and runner-up margin >= 0.2. Otherwise the previous
+effort is retained where supported, without blocking the model choice.
+The requested (or retained) effort is mapped to the nearest supported non-max
+level on the selected model; ties choose the higher level. For example, `off`
+maps to `minimal` on Astra and `low` on Opus 5.5. A previous manual `max` maps
+down to the highest supported non-max level. Notifications explain adaptations.
 
 All Jev work shares one two-second deadline with no retries. Timeout, cancellation,
 HTTP failure, malformed answers and invalid decisions retain existing settings.
