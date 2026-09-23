@@ -12,6 +12,7 @@ import router from "../src/index.ts";
 
 const opus = getModel("anthropic", "claude-opus-5-5")!;
 const astra = getModel("openai-codex", "gpt-6-astra")!;
+const sol = getModel("openai-codex", "gpt-6-sol")!;
 
 function answer(
   body: any,
@@ -43,7 +44,7 @@ function answer(
   };
 }
 
-async function harness(t: any) {
+async function harness(t: any, available = [opus, astra]) {
   let model: typeof opus | typeof astra = opus;
   let effort = "high";
   const handlers = new Map<string, Function>();
@@ -79,7 +80,7 @@ async function harness(t: any) {
       return model;
     },
     signal: new AbortController().signal,
-    modelRegistry: { getAvailable: () => [opus, astra] },
+    modelRegistry: { getAvailable: () => available },
     sessionManager: { buildContextEntries: () => messages },
     getSystemPrompt: () => "Respect scope; explain concisely.",
     ui: {
@@ -316,34 +317,49 @@ test("low confidence and close model probabilities do not veto the top model", a
     return response;
   });
   await h.emit("turn_start");
-  assert.deepEqual(h.settings(), ["gpt-6-astra", "high"]);
+  assert.deepEqual(h.settings(), ["gpt-6-astra", "medium"]);
 });
 
-test("maps confident off to the selected model's minimum supported effort", async (t) => {
-  const h = await harness(t);
-  h.respond((body) => answer(body, undefined, "hold", "off"));
-  await h.emit("turn_start");
-  assert.deepEqual(h.settings(), ["gpt-6-astra", "minimal"]);
-  h.respond((body) => answer(body, "anthropic/claude-opus-5-5", "hold", "off"));
-  await h.emit("turn_start");
-  assert.deepEqual(h.settings(), ["claude-opus-5-5", "low"]);
+test("offers four effort choices and applies every native level on Astra, Opus and Sol", async (t) => {
+  const h = await harness(t, [opus, astra, sol]);
+  for (const model of [
+    "openai-codex/gpt-6-astra",
+    "anthropic/claude-opus-5-5",
+    "openai-codex/gpt-6-sol",
+  ]) {
+    for (const effort of ["low", "medium", "high", "xhigh"]) {
+      h.respond((body) => {
+        assert.deepEqual(Object.keys(body.questions.effort.criteria), [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+        ]);
+        const response = answer(body, model, "hold", effort);
+        response.answers.effort.confidence = 0.1;
+        response.answers.effort.probabilities = Object.fromEntries(
+          ["low", "medium", "high", "xhigh"].map((level) => [
+            level,
+            level === effort ? 0.28 : 0.24,
+          ]),
+        );
+        return response;
+      });
+      await h.emit("turn_start");
+      assert.deepEqual(h.settings(), [model.split("/")[1], effort]);
+    }
+  }
 });
 
-test("uncertain effort is preserved where supported and adapted where not", async (t) => {
-  const h = await harness(t);
-  await h.pi.setModel(astra);
-  h.pi.setThinkingLevel("minimal");
-  h.respond((body) => {
-    const response = answer(body, "anthropic/claude-opus-5-5", "hold", "high");
-    response.answers.effort.confidence = 0.2;
-    return response;
+for (const effort of ["off", "minimal"]) {
+  test(`rejects obsolete effort choice ${effort}`, async (t) => {
+    const h = await harness(t);
+    h.respond((body) => answer(body, undefined, "hold", effort));
+    await h.emit("turn_start");
+    assert.deepEqual(h.settings(), ["claude-opus-5-5", "high"]);
+    assert.match(h.warnings.at(-1)!, /Malformed Jev decision/);
   });
-  await h.emit("turn_start");
-  assert.deepEqual(h.settings(), ["claude-opus-5-5", "low"]);
-  h.pi.setThinkingLevel("max");
-  await h.emit("turn_start");
-  assert.deepEqual(h.settings(), ["claude-opus-5-5", "xhigh"]);
-});
+}
 
 for (const interrupt of ["off", "session", "abort"]) {
   test(`does not apply stale effort after model commit interrupted by ${interrupt}`, async (t) => {

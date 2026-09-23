@@ -5,13 +5,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { loadConfig, modelKey } from "./config.ts";
 import { supportedEffort } from "./effort.ts";
-import {
-  buildRequest,
-  clearChoice,
-  evaluate,
-  excerpt,
-  parseDecision,
-} from "./jev.ts";
+import { buildRequest, evaluate, excerpt, parseDecision } from "./jev.ts";
 
 export default function precisionRouter(pi: ExtensionAPI): void {
   let enabled = true;
@@ -141,17 +135,11 @@ export default function precisionRouter(pi: ExtensionAPI): void {
           : "following top model choice; benefit is advisory";
       const effective = available.find((model) => modelKey(model) === proposed);
       if (!effective) throw new Error("selected model unavailable");
-      const effortIsClear = clearChoice(decision.effort);
-      const requestedEffort = effortIsClear
-        ? decision.effort.choice
-        : previousEffort;
+      const requestedEffort = decision.effort.choice;
       const effort = supportedEffort(
         requestedEffort,
         getSupportedThinkingLevels(effective),
       );
-      if (!effortIsClear)
-        reason +=
-          "; uncertain effort: retaining previous level where supported";
       if (effort !== requestedEffort)
         reason += `; effort adapted ${requestedEffort} → ${effort}`;
       signal.throwIfAborted();

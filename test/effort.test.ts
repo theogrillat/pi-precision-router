@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { supportedEffort } from "../src/effort.ts";
 
 for (const [requested, supported, expected] of [
-  ["off", ["minimal", "low", "high"], "minimal"],
+  ["xhigh", ["off", "low", "medium", "high"], "high"],
+  ["low", ["off", "minimal", "low", "high"], "low"],
   ["medium", ["off"], "off"],
   ["medium", ["low", "high"], "high"],
   ["max", ["low", "high", "max"], "high"],

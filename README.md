@@ -36,7 +36,7 @@ the follow-up after tool calls. It does not route tools, nested Jev evaluation o
 idle cache warming. One HTTP evaluation contains three independent Choice questions:
 
 1. **Model**: actual configured, available model IDs and curated descriptions.
-2. **Effort**: off, minimal, low, medium or high; never max.
+2. **Effort**: exactly low, medium, high or xhigh; never off, minimal or max.
 3. **Benefit**: hold, or a specific model with meaningful quality gain, or a
    specific model with substantial speed gain while quality is preserved.
 
@@ -46,13 +46,16 @@ advisory only: even `hold` does not veto a different model choice. There is no
 current-model or prompt-cache preference. Quality improvements are not capped
 by dollars or estimated cache cost.
 
-Effort remains independent. A clear effort choice needs confidence >= 0.6,
-winning probability >= 0.7 and runner-up margin >= 0.2. Otherwise the previous
-effort is retained where supported, without blocking the model choice.
-The requested (or retained) effort is mapped to the nearest supported non-max
-level on the selected model; ties choose the higher level. For example, `off`
-maps to `minimal` on Astra and `low` on Opus 5.5. A previous manual `max` maps
-down to the highest supported non-max level. Notifications explain adaptations.
+The top valid effort choice is also applied every step, without confidence,
+probability or margin thresholds. Use the named native level when supported;
+otherwise map to the nearest supported non-max level, choosing higher on ties.
+Models without reasoning map to `off`. Notifications explain adaptations.
+
+In the current Pi registry, all six default models (Luna, Sol, Astra, Opus 5.5,
+Fable 5.1 and Sonnet 5) support all four named levels, so their mappings are
+identity mappings: low → low, medium → medium, high → high, xhigh → xhigh.
+Sol is reasoning-capable; its additional support for `off` does not cause the
+router to select `off`. Mapping uses each model's live Pi capability metadata.
 
 All Jev work shares one two-second deadline with no retries. Timeout, cancellation,
 HTTP failure, malformed answers and invalid decisions retain existing settings.

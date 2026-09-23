@@ -72,13 +72,13 @@ export function buildRequest(
       },
       effort: {
         type: "choice",
-        instructions: `${policy} Independently of model selection, how much reasoning effort does this next step merit? Favor higher effort only when likely quality gain warrants slowdown. Code maps this abstract effort to the nearest supported non-max level on the selected model; uncertain effort retains the previous level where supported without blocking model selection.`,
+        instructions: `${policy} Independently of model selection, choose low, medium, high or xhigh reasoning effort for this next step. Favor higher effort only when likely quality gain warrants slowdown. The top effort choice is always applied regardless of confidence. Code uses the named native level when supported, otherwise the nearest supported non-max level on the selected model; models without reasoning use off.`,
         criteria: {
-          off: "No extended reasoning needed.",
-          minimal: "Very small reasoning requirement.",
           low: "Routine straightforward work.",
           medium: "Several meaningful reasoning steps.",
           high: "Difficult reasoning where the quality benefit warrants latency.",
+          xhigh:
+            "The hardest reasoning or engineering problems requiring the greatest non-max effort.",
         },
       },
       benefit: {
@@ -136,14 +136,6 @@ export function parseDecision(raw: unknown, request: Request) {
     effort: parseChoice(answers.effort, request.questions.effort.criteria),
     benefit: parseChoice(answers.benefit, request.questions.benefit.criteria),
   };
-}
-export function clearChoice(choice: Choice): boolean {
-  const sorted = Object.values(choice.probabilities).sort((a, b) => b - a);
-  return (
-    choice.confidence >= 0.6 &&
-    sorted[0] >= 0.7 &&
-    sorted[0] - (sorted[1] ?? 0) >= 0.2
-  );
 }
 export async function evaluate(
   request: Request,
