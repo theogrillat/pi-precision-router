@@ -107,6 +107,7 @@ async function harness(t: any) {
     handlers.get(event)?.({}, ctx as unknown as ExtensionContext);
   await emit("session_start");
   return {
+    pi,
     emit,
     requests,
     warnings,
@@ -319,3 +320,50 @@ test("uncertain or contradictory model-specific benefits cannot justify switchin
   await h.emit("turn_start");
   assert.deepEqual(h.settings(), ["claude-opus-5-5", "medium"]);
 });
+
+for (const interrupt of ["off", "session", "abort"]) {
+  test(`does not apply stale effort after model commit interrupted by ${interrupt}`, async (t) => {
+    const h = await harness(t);
+    const commit = h.pi.setModel;
+    let finish!: () => void;
+    const controller = new AbortController();
+    h.ctx.signal = controller.signal;
+    h.pi.setModel = async (model) => {
+      await commit(model);
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      return true;
+    };
+    const pending = h.emit("turn_start");
+    await new Promise((resolve) => setImmediate(resolve));
+    if (interrupt === "off") await h.command("off");
+    if (interrupt === "session") await h.emit("session_start");
+    if (interrupt === "abort") controller.abort();
+    h.pi.setThinkingLevel("low");
+    finish();
+    await pending;
+    assert.equal(h.settings()[1], "low");
+  });
+}
+
+test("manual effort selection refreshes disabled status", async (t) => {
+  const h = await harness(t);
+  await h.command("off");
+  h.pi.setThinkingLevel("low");
+  await h.emit("thinking_level_select");
+  assert.match(h.statuses.at(-1)!, /off.*low/);
+});
+
+for (const key of ["toString", "constructor", "__proto__"]) {
+  test(`rejects inherited configuration key ${key}`, async (t) => {
+    const h = await harness(t);
+    const root = mkdtempSync(join(tmpdir(), "precision-invalid-"));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    process.env.PI_CODING_AGENT_DIR = root;
+    writeFileSync(join(root, "pi-precision-router.json"), `{ "${key}": 123 }`);
+    await h.emit("turn_start");
+    assert.equal(h.requests.length, 0);
+    assert.deepEqual(h.settings(), ["claude-opus-5-5", "high"]);
+  });
+}

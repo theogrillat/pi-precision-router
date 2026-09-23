@@ -79,7 +79,7 @@ export function loadConfig(cwd: string): Config {
       !patch ||
       typeof patch !== "object" ||
       Array.isArray(patch) ||
-      Object.keys(patch).some((key) => !(key in defaults))
+      Object.keys(patch).some((key) => !Object.hasOwn(defaults, key))
     )
       throw new Error("Invalid router configuration");
     config = { ...(config as Config), ...patch };

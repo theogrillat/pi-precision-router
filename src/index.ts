@@ -52,6 +52,9 @@ export default function precisionRouter(pi: ExtensionAPI): void {
   pi.on("model_select", (_event, ctx) => {
     status(ctx);
   });
+  pi.on("thinking_level_select", (_event, ctx) => {
+    status(ctx);
+  });
   pi.registerCommand("precision-router", {
     description: "Precision routing on|off",
     handler: async (args, ctx) => {
@@ -140,6 +143,14 @@ export default function precisionRouter(pi: ExtensionAPI): void {
       signal.throwIfAborted();
       if (effective !== previousModel && !(await pi.setModel(effective)))
         throw new Error("model switch rejected");
+      if (
+        signal.aborted ||
+        epoch !== generation ||
+        !enabled ||
+        !ctx.model ||
+        modelKey(ctx.model) !== modelKey(effective)
+      )
+        return;
       pi.setThinkingLevel(
         effort as Parameters<ExtensionAPI["setThinkingLevel"]>[0],
       );
