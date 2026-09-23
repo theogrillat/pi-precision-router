@@ -404,3 +404,35 @@ test("uses trimmed config API key before environment, with blank-key fallback", 
   await h.emit("turn_start");
   assert.ok(h.warnings.every((message) => !message.includes("saved-secret")));
 });
+
+test("testing feedback reports switched, held and rejected decisions without deduplicating steps", async (t) => {
+  const h = await harness(t);
+  const root = mkdtempSync(join(tmpdir(), "precision-feedback-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  process.env.PI_CODING_AGENT_DIR = root;
+  const path = join(root, "pi-precision-router.json");
+  writeFileSync(path, JSON.stringify({ notifyDecisions: true }));
+  await h.emit("turn_start");
+  assert.match(h.warnings.at(-1)!, /switched.*gpt-6-astra.*medium/s);
+  assert.match(h.warnings.at(-1)!, /proposed:.*gpt-6-astra.*benefit: quality/s);
+  h.respond((body) => answer(body, undefined, "hold"));
+  await h.emit("turn_start");
+  assert.match(h.warnings.at(-1)!, /held.*gpt-6-astra.*medium/s);
+  h.respond((body) => answer(body, undefined, "hold", "off"));
+  await h.emit("turn_start");
+  assert.match(
+    h.warnings.at(-1)!,
+    /rejected.*gpt-6-astra.*medium.*proposed:.*off.*unsupported effort/s,
+  );
+  const count = h.warnings.length;
+  await h.emit("turn_start");
+  assert.equal(h.warnings.length, count + 1);
+  writeFileSync(path, JSON.stringify({ notifyDecisions: false }));
+  h.respond((body) => answer(body, undefined, "hold"));
+  await h.emit("turn_start");
+  assert.equal(h.warnings.length, count + 1);
+  writeFileSync(path, JSON.stringify({ notifyDecisions: true }));
+  h.ctx.hasUI = false;
+  await h.emit("turn_start");
+  assert.equal(h.warnings.length, count + 1);
+});

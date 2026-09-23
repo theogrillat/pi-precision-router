@@ -19,8 +19,15 @@ user-settings change or publication is performed by tests.
 
 New sessions start enabled. `/precision-router off` stops requests; `/precision-router on`
 resumes. Manual model selection does not disable routing. The status shows
-on/off, effective model and effort; decisions do not add chat entries.
-Warnings are deduplicated per session. Headless use needs no terminal UI.
+on/off, effective model and effort. By default, decisions do not add chat entries
+and warnings are deduplicated per session. Headless use needs no terminal UI.
+
+For testing, set `"notifyDecisions": true` in router configuration. Every routing
+attempt then emits a notification showing switched/held/rejected, effective settings,
+validated proposed settings, Jev confidence, model-specific benefit, guard reason
+and elapsed time. Repeated rejections remain visible. No prompt text or credentials
+are included. These are notifications, not messages sent to the model. Set the flag
+back to `false` for quiet operation. A hidden custom footer does not hide notifications.
 
 ## The routing contract
 

@@ -84,9 +84,15 @@ export default function precisionRouter(pi: ExtensionAPI): void {
     const previousModel = ctx.model;
     const previousEffort = pi.getThinkingLevel();
     let abortHandler: (() => void) | undefined;
+    const started = Date.now();
+    let notifyDecisions = false;
+    let outcome = "skipped";
+    let proposal = "no validated decision";
+    let reason = "settings changed while routing";
     try {
       signal.throwIfAborted();
       const config = loadConfig(ctx.cwd);
+      notifyDecisions = config.notifyDecisions;
       const available = ctx.modelRegistry.getAvailable();
       const profiles = config.models.filter((profile) =>
         available.some((model) => modelKey(model) === modelKey(profile)),
@@ -127,11 +133,22 @@ export default function precisionRouter(pi: ExtensionAPI): void {
         return;
       const decision = parseDecision(raw, request);
       const proposed = decision.model.choice;
+      proposal = `${proposed} · ${decision.effort.choice} (confidence model ${decision.model.confidence.toFixed(2)}, effort ${decision.effort.confidence.toFixed(2)}) · benefit: ${decision.benefit.choice} (${decision.benefit.confidence.toFixed(2)})`;
       const switchModel =
         clearChoice(decision.model) &&
         clearChoice(decision.benefit) &&
         (decision.benefit.choice === `quality:${proposed}` ||
           decision.benefit.choice === `speed:${proposed}`);
+      reason = "model and benefit selections disagree";
+      if (switchModel) reason = "clear matching model-specific benefit";
+      else if (proposed === modelKey(previousModel))
+        reason = "selected model already active";
+      else if (!clearChoice(decision.model))
+        reason = "model choice below switching thresholds";
+      else if (!clearChoice(decision.benefit))
+        reason = "switching benefit below thresholds";
+      else if (decision.benefit.choice === "hold")
+        reason = "no meaningful switching benefit";
       const effective = switchModel
         ? available.find((model) => modelKey(model) === proposed)
         : previousModel;
@@ -139,7 +156,9 @@ export default function precisionRouter(pi: ExtensionAPI): void {
       const effort = decision.effort.choice;
       const supported = getSupportedThinkingLevels(effective);
       if (!supported.some((level) => level === effort))
-        throw new Error("unsupported effort for effective model");
+        throw new Error(
+          `unsupported effort ${effort} for ${effective.id}; supported: ${supported.filter((level) => level !== "max").join(", ")}`,
+        );
       if (!clearChoice(decision.effort))
         throw new Error("uncertain reasoning effort");
       signal.throwIfAborted();
@@ -157,15 +176,29 @@ export default function precisionRouter(pi: ExtensionAPI): void {
       pi.setThinkingLevel(
         effort as Parameters<ExtensionAPI["setThinkingLevel"]>[0],
       );
+      outcome = effective !== previousModel ? "switched" : "held";
+      if (
+        effective === previousModel &&
+        pi.getThinkingLevel() !== previousEffort
+      )
+        outcome = "held model, updated effort";
     } catch (error) {
-      if (epoch === generation && !ctx.signal?.aborted)
-        warn(ctx, error instanceof Error ? error.message : "routing failed");
+      outcome = "rejected";
+      reason = error instanceof Error ? error.message : "routing failed";
+      if (epoch === generation && !ctx.signal?.aborted && !notifyDecisions)
+        warn(ctx, reason);
     } finally {
       clearTimeout(timer);
       if (abortHandler) signal.removeEventListener("abort", abortHandler);
       if (epoch === generation) {
         active = undefined;
         status(ctx);
+        if (notifyDecisions && enabled && ctx.hasUI && !ctx.signal?.aborted) {
+          ctx.ui.notify(
+            `precision-router: ${outcome} · effective: ${ctx.model ? modelKey(ctx.model) : "none"} · ${pi.getThinkingLevel()}\nproposed: ${proposal}\n${reason} · ${Date.now() - started}ms`,
+            outcome === "rejected" ? "warning" : "info",
+          );
+        }
       }
     }
   });

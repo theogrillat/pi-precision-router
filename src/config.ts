@@ -10,11 +10,13 @@ export interface Profile {
 export interface Config {
   models: Profile[];
   preferences: string;
+  notifyDecisions: boolean;
   apiKey: string;
   apiKeyEnv: string;
   jevModel: string;
 }
 export const defaults: Config = {
+  notifyDecisions: false,
   apiKey: "",
   apiKeyEnv: "TYPESAFE_API_KEY",
   jevModel: "jev-latest",
@@ -92,6 +94,8 @@ export function loadConfig(cwd: string): Config {
     config = { ...(config as Config), ...patch };
   }
   const c = config as Config;
+  if (typeof c.notifyDecisions !== "boolean")
+    throw new Error("Invalid feedback configuration");
   if (typeof c.apiKey !== "string")
     throw new Error("Invalid API key configuration");
   if (
