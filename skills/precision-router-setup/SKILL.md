@@ -46,6 +46,28 @@ Read `../../src/config.ts` for the current validation rules and
   Project fields override global fields; arrays and objects replace rather
   than merge. Flag project overrides that would hide a global change.
 
+### When a config already exists
+
+Treat reruns as updates, not fresh setup. Read both config layers before proposing
+changes and distinguish the saved roster in each file from the effective roster.
+If a file is malformed or unreadable, report it and ask how to proceed; never
+silently treat it as absent or overwrite it.
+
+Compare the effective roster with fresh discovery and summarize:
+
+- Configured models still available.
+- Available providers/models not currently in the roster, especially a provider
+  the user says they just added. Call these unconfigured, not necessarily newly
+  installed: there is no previous discovery snapshot.
+- Configured models currently unavailable. Warn, but do not silently remove them;
+  credentials or a provider may be temporarily unavailable.
+
+Ask what to add, remove, or revise. Preserve existing model descriptions, effort
+labels/maps, preferences, and optional settings by default. Do not repeat the
+initial priorities interview unless the user wants to change them. Still ask
+which scope to save to, showing where the existing config lives. If nothing
+needs changing, say so and leave both files untouched.
+
 ## 2. Have a short conversation
 
 In one compact message, summarize what you found and ask:
@@ -61,7 +83,8 @@ In one compact message, summarize what you found and ask:
 3. What matters most: correctness, speed, or a balance? Propose a short
    `preferences` sentence and four effort labels: `low` (straightforward),
    `medium` (several reasoning steps), `high` (difficult), `xhigh` (hardest).
-   Offer to retain an existing roster rather than replacing it by default.
+   For an existing config, retain its roster and preferences by default and ask
+   only about the requested changes.
 
 Use answers already given; do not repeat questions. Treat model strengths and
 speed as proposals to confirm, not facts inferred from a model's name. Keep
@@ -74,8 +97,16 @@ with the proposed config, not in a separate lengthy privacy interview.
 
 ## 3. Build the proposal
 
-- Include only confirmed, available models, with nonempty descriptions of their
+- Add only confirmed, available models, with nonempty descriptions of their
   intended strengths, limitations, and speed. Never save placeholder IDs.
+  Existing unavailable entries may be retained unchanged with a warning; the
+  router excludes them until available. Do not claim their capabilities were
+  verified during this run.
+- On updates, build the complete intended roster rather than saving only the
+  additions: `models` replaces the whole array. Map added models to the existing
+  effort labels. Change labels only with approval and update every affected
+  model's map together. Do not copy project-only choices into global config
+  unless explicitly requested.
 - Verify native thinking levels for each selected model. The CLI's `thinking`
   column is only yes/no; it does **not** prove support for `xhigh` or any other
   specific level. Consult the installed Pi model metadata and
@@ -94,14 +125,16 @@ with the proposed config, not in a separate lengthy privacy interview.
   Keep `jevModel` at its default `jev-latest` and `notifyDecisions` false unless
   the user requests otherwise. Preserve valid existing optional settings.
 
-Show the destination, a compact model/effort table, preferences, and any changes
-to an existing config. Get explicit approval before writing. If native levels
+Show the destination, a compact model/effort table, preferences, and an explicit
+added/removed/changed summary for an existing config. Get explicit approval before writing. If native levels
 remain unverified, resolve that first or leave an unsaved draft clearly marked
 as incomplete.
 
 ## 4. Save and finish
 
-After approval, create the parent directory if needed and write valid JSON only
+After approval, reread the destination and other config layer. If either changed
+since the proposal, reconcile and get approval again rather than overwriting
+concurrent edits. Create the parent directory if needed and write valid JSON only
 to the chosen router config. Preserve unrelated existing settings. If legacy
 credential fields are present, remove them without copying their secret into
 chat or a backup. Do not change Pi's model registry, auth, or settings files.
