@@ -91,7 +91,6 @@ The example is not an installed or automatically selected roster.
 
 ```json
 {
-  "apiKeyEnv": "TYPESAFE_API_KEY",
   "jevModel": "jev-latest",
   "preferences": "Prefer concise explanations and tightly scoped code changes.",
   "efforts": {
@@ -111,12 +110,11 @@ The example is not an installed or automatically selected roster.
 }
 ```
 
-The endpoint is fixed to `https://api.typesafe.ai/v1/systemone`. A nonblank `apiKey` in configuration takes precedence over the environment variable
-named by `apiKeyEnv` (default `TYPESAFE_API_KEY`). Both values are trimmed; a blank
-configured key falls back to the environment. Add `"apiKey": "your-key"` to your
-complete `~/.pi/agent/pi-precision-router.json` configuration. Keep this file
-private (permissions `0600`) and never commit it. Credentials are never put in
-routing state or reports. Malformed configuration errors omit file contents.
+The endpoint is fixed to `https://api.typesafe.ai/v1/systemone`. Authentication
+uses only the `TYPESAFE_API_KEY` environment variable, trimmed before use. Export
+it in your shell before starting Pi; missing or blank values skip routing.
+Neither `apiKey` nor `apiKeyEnv` is accepted in configuration. Credentials are
+never put in routing state or reports. Malformed configuration errors omit file contents.
 Missing models are warned about and excluded, never silently substituted.
 Only exact configured, available provider/model pairs can be selected.
 
@@ -132,7 +130,8 @@ effective model list and preferences into the global or project config, add the
 `efforts` descriptions, and add an explicit `effortMap` to every model. To preserve
 the previous four-level behavior on models supporting all four levels, use
 `{"low":"low","medium":"medium","high":"high","xhigh":"xhigh"}`.
-There is no silent fallback to the old roster. API key configuration is unchanged.
+There is no silent fallback to the old roster. Remove `apiKey` and `apiKeyEnv`
+from existing configs and export `TYPESAFE_API_KEY` in your environment instead.
 
 ## Context and privacy
 

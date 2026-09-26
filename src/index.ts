@@ -98,10 +98,8 @@ export default function precisionRouter(pi: ExtensionAPI): void {
       if (missing.length)
         warn(ctx, `unavailable: ${missing.map(modelKey).join(", ")}`);
       if (!profiles.length) throw new Error("no configured models available");
-      const apiKey =
-        config.apiKey.trim() || process.env[config.apiKeyEnv]?.trim();
-      if (!apiKey)
-        throw new Error(`set apiKey in router config or ${config.apiKeyEnv}`);
+      const apiKey = process.env.TYPESAFE_API_KEY?.trim();
+      if (!apiKey) throw new Error("set TYPESAFE_API_KEY environment variable");
       const request = buildRequest(
         ctx,
         config,

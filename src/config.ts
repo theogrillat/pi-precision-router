@@ -13,14 +13,10 @@ export interface Config {
   efforts: Record<string, string>;
   preferences: string;
   notifyDecisions: boolean;
-  apiKey: string;
-  apiKeyEnv: string;
   jevModel: string;
 }
 export const defaults: Config = {
   notifyDecisions: false,
-  apiKey: "",
-  apiKeyEnv: "TYPESAFE_API_KEY",
   jevModel: "jev-latest",
   preferences:
     "Prioritize correctness and scope adherence, then speed and clarity.",
@@ -62,10 +58,8 @@ export function loadConfig(cwd: string): Config {
   const c = config as Config;
   if (typeof c.notifyDecisions !== "boolean")
     throw new Error("Invalid feedback configuration");
-  if (typeof c.apiKey !== "string")
-    throw new Error("Invalid API key configuration");
   if (
-    ![c.apiKeyEnv, c.jevModel, c.preferences].every(
+    ![c.jevModel, c.preferences].every(
       (value) =>
         typeof value === "string" &&
         value.trim().length > 0 &&

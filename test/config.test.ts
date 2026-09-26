@@ -87,6 +87,8 @@ for (const [label, patch] of [
       ],
     },
   ],
+  ["inline API key", { apiKey: "secret" }],
+  ["configurable API key variable", { apiKeyEnv: "ANOTHER_KEY" }],
   ["empty effort roster", { efforts: {} }],
   ["invalid description", { efforts: { quick: 2, deep: "Difficult" } }],
   ["prototype effort label", { efforts: JSON.parse('{"__proto__":"Bad"}') }],

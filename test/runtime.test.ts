@@ -281,10 +281,8 @@ test("project replaces the roster and overrides global preferences, invalid conf
     JSON.stringify({
       ...fixtureConfig,
       preferences: "global preference",
-      apiKeyEnv: "TEST_JEV_KEY",
     }),
   );
-  process.env.TEST_JEV_KEY = "fake";
   const configPath = join(root, ".pi", "pi-precision-router.json");
   writeFileSync(
     configPath,
@@ -430,30 +428,34 @@ test("awaits a host model switch beyond the Jev deadline", async (t) => {
   assert.equal(h.requests.length, 1);
 });
 
-test("uses trimmed config API key before environment, with blank-key fallback", async (t) => {
+test("uses the trimmed environment API key without exposing it in routing state", async (t) => {
   const h = await harness(t);
-  const root = mkdtempSync(join(tmpdir(), "precision-key-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  process.env.PI_CODING_AGENT_DIR = root;
-  const path = join(root, "pi-precision-router.json");
+  process.env.TYPESAFE_API_KEY = "  env-secret  ";
   const authorizations: unknown[] = [];
   t.mock.method(globalThis, "fetch", async (_url: unknown, options: any) => {
     authorizations.push(options.headers.Authorization);
-    assert.ok(!options.body.includes("saved-secret"));
+    assert.ok(!options.body.includes("env-secret"));
     return {
       ok: true,
       json: async () => answer(JSON.parse(options.body), undefined, "hold"),
     };
   });
-  writeFileSync(path, JSON.stringify({ apiKey: "  saved-secret  " }));
   await h.emit("turn_start");
-  writeFileSync(path, JSON.stringify({ apiKey: "  " }));
-  await h.emit("turn_start");
-  assert.deepEqual(authorizations, ["Bearer saved-secret", "Bearer test-key"]);
-  writeFileSync(path, '{"apiKey": "saved-secret", broken}');
-  await h.emit("turn_start");
-  assert.ok(h.warnings.every((message) => !message.includes("saved-secret")));
+  assert.deepEqual(authorizations, ["Bearer env-secret"]);
+  assert.ok(h.warnings.every((message) => !message.includes("env-secret")));
 });
+
+for (const key of [undefined, "", "   "]) {
+  test(`skips routing when environment API key is ${JSON.stringify(key)}`, async (t) => {
+    const h = await harness(t);
+    if (key === undefined) delete process.env.TYPESAFE_API_KEY;
+    else process.env.TYPESAFE_API_KEY = key;
+    await h.emit("turn_start");
+    assert.equal(h.requests.length, 0);
+    assert.deepEqual(h.settings(), ["claude-opus-5-5", "high"]);
+    assert.match(h.warnings.at(-1)!, /set TYPESAFE_API_KEY environment variable/);
+  });
+}
 
 test("testing feedback reports switched, held and rejected decisions without deduplicating steps", async (t) => {
   const h = await harness(t);
