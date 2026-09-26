@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getModel } from "@earendil-works/pi-ai/compat";
@@ -127,7 +133,8 @@ async function harness(t: any, available = [opus, astra]) {
     respond: (fn: typeof respond) => {
       respond = fn;
     },
-    command: (value: string) => commands.get("precision-router").handler(value, ctx),
+    command: (value: string) =>
+      commands.get("precision-router").handler(value, ctx),
   };
 }
 
@@ -453,7 +460,10 @@ for (const key of [undefined, "", "   "]) {
     await h.emit("turn_start");
     assert.equal(h.requests.length, 0);
     assert.deepEqual(h.settings(), ["claude-opus-5-5", "high"]);
-    assert.match(h.warnings.at(-1)!, /set TYPESAFE_API_KEY environment variable/);
+    assert.match(
+      h.warnings.at(-1)!,
+      /set TYPESAFE_API_KEY environment variable/,
+    );
   });
 }
 
@@ -487,6 +497,82 @@ test("testing feedback reports switched, held and rejected decisions without ded
   h.ctx.hasUI = false;
   await h.emit("turn_start");
   assert.equal(h.warnings.length, count + 1);
+});
+
+test("feedback commands override config for the session without changing it", async (t) => {
+  const h = await harness(t, [opus, astra, sol]);
+  const path = join(h.ctx.cwd, ".pi", "pi-precision-router.json");
+  const saved = JSON.stringify({ ...fixtureConfig, notifyDecisions: true });
+  writeFileSync(path, saved);
+  await h.command("feedback off");
+  assert.match(h.warnings.at(-1)!, /feedback off/);
+  const count = h.warnings.length;
+  await h.emit("turn_start");
+  assert.equal(h.warnings.length, count);
+  await h.command("feedback on");
+  await h.emit("turn_start");
+  assert.match(h.warnings.at(-1)!, /proposed:/);
+  await h.command("feedback off");
+  await h.emit("session_start");
+  await h.emit("turn_start");
+  assert.match(h.warnings.at(-1)!, /proposed:/);
+  assert.equal(readFileSync(path, "utf8"), saved);
+});
+
+test("feedback toggle leaves routing paused and resets to quiet config on session start", async (t) => {
+  const h = await harness(t, [opus, astra, sol]);
+  h.respond((body) => answer(body, undefined, "hold"));
+  await h.command("off");
+  await h.command("feedback on");
+  await h.emit("turn_start");
+  assert.equal(h.requests.length, 0);
+  await h.command("on");
+  await h.emit("turn_start");
+  assert.match(h.warnings.at(-1)!, /proposed:/);
+  await h.emit("session_start");
+  const count = h.warnings.length;
+  await h.emit("turn_start");
+  assert.equal(h.warnings.length, count);
+});
+
+test("feedback command updates in-flight reporting without cancelling routing", async (t) => {
+  const h = await harness(t, [opus, astra, sol]);
+  let finish!: () => void;
+  t.mock.method(globalThis, "fetch", async (_url: unknown, options: any) => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    return {
+      ok: true,
+      json: async () => answer(JSON.parse(options.body), undefined, "hold"),
+    };
+  });
+  for (const value of ["on", "off"]) {
+    const pending = h.emit("turn_start");
+    await new Promise((resolve) => setImmediate(resolve));
+    await h.command(`feedback ${value}`);
+    const count = h.warnings.length;
+    finish();
+    await pending;
+    assert.deepEqual(h.settings(), ["gpt-6-astra", "medium"]);
+    assert.equal(h.warnings.length, count + (value === "on" ? 1 : 0));
+  }
+});
+
+test("feedback commands handle invalid arguments and headless use", async (t) => {
+  const h = await harness(t, [opus, astra, sol]);
+  for (const args of ["feedback", "feedback maybe", "feedback on extra"]) {
+    await h.command(args);
+    assert.match(h.warnings.at(-1)!, /usage:.*feedback on\|off/);
+  }
+  const count = h.warnings.length;
+  await h.emit("turn_start");
+  assert.equal(h.warnings.length, count);
+  h.ctx.hasUI = false;
+  await h.command("feedback on");
+  await h.emit("turn_start");
+  assert.equal(h.warnings.length, count);
+  assert.equal(h.requests.length, 2);
 });
 
 test("routes a custom provider using arbitrary configured effort labels and mappings", async (t) => {

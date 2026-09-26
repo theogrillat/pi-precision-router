@@ -147,6 +147,8 @@ Do not claim a live routing test passed based on static validation.
 Finish with the saved path, chosen models, and any remaining prerequisite.
 Configuration is reread on each turn; an installed extension/skill may need
 `/reload`, while a newly exported key requires restarting Pi. Suggest
-`/precision-router on` if routing is paused. Offer `notifyDecisions: true` for an
-optional user-approved live check, noting it makes a TypeSafe request. Do not
-start another agent session or send a test prompt automatically.
+`/precision-router on` if routing is paused. Offer `/precision-router feedback on`
+for an optional user-approved live check; subsequent routed turns make TypeSafe
+requests. `/precision-router feedback off` hides feedback again. These commands
+override `notifyDecisions` for the session without changing the saved config.
+Do not start another agent session or send a test prompt automatically.

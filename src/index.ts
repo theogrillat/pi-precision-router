@@ -9,6 +9,7 @@ import { buildRequest, evaluate, excerpt, parseDecision } from "./jev.ts";
 
 export default function precisionRouter(pi: ExtensionAPI): void {
   let enabled = true;
+  let feedbackOverride: boolean | undefined;
   let generation = 0;
   let active: AbortController | undefined;
   let activeRequest = "";
@@ -34,6 +35,7 @@ export default function precisionRouter(pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
     invalidate();
     enabled = true;
+    feedbackOverride = undefined;
     activeRequest = "";
     warned.clear();
     status(ctx);
@@ -51,11 +53,24 @@ export default function precisionRouter(pi: ExtensionAPI): void {
     status(ctx);
   });
   pi.registerCommand("precision-router", {
-    description: "Precision routing on|off",
+    description: "Precision routing on|off or feedback on|off",
     handler: async (args, ctx) => {
       const value = args.trim();
+      const feedback = /^feedback\s+(on|off)$/.exec(value);
+      if (feedback) {
+        feedbackOverride = feedback[1] === "on";
+        if (ctx.hasUI)
+          ctx.ui.notify(
+            `precision-router: feedback ${feedback[1]} (this session)`,
+            "info",
+          );
+        return;
+      }
       if (value !== "on" && value !== "off") {
-        warn(ctx, "usage: /precision-router on|off");
+        warn(
+          ctx,
+          "usage: /precision-router on|off or /precision-router feedback on|off",
+        );
         return;
       }
       invalidate();
@@ -170,7 +185,11 @@ export default function precisionRouter(pi: ExtensionAPI): void {
     } catch (error) {
       outcome = "rejected";
       reason = error instanceof Error ? error.message : "routing failed";
-      if (epoch === generation && !ctx.signal?.aborted && !notifyDecisions)
+      if (
+        epoch === generation &&
+        !ctx.signal?.aborted &&
+        !(feedbackOverride ?? notifyDecisions)
+      )
         warn(ctx, reason);
     } finally {
       clearTimeout(timer);
@@ -178,7 +197,12 @@ export default function precisionRouter(pi: ExtensionAPI): void {
       if (epoch === generation) {
         active = undefined;
         status(ctx);
-        if (notifyDecisions && enabled && ctx.hasUI && !ctx.signal?.aborted) {
+        if (
+          (feedbackOverride ?? notifyDecisions) &&
+          enabled &&
+          ctx.hasUI &&
+          !ctx.signal?.aborted
+        ) {
           ctx.ui.notify(
             `precision-router: ${outcome} · effective: ${ctx.model ? modelKey(ctx.model) : "none"} · ${pi.getThinkingLevel()}\nproposed: ${proposal}\n${reason} · ${Date.now() - started}ms`,
             outcome === "rejected" ? "warning" : "info",

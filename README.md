@@ -53,6 +53,11 @@ from older configs; neither is accepted.
 Routing starts enabled. Use `/precision-router off` to pause and
 `/precision-router on` to resume. Manual model selection does not pause routing.
 
+Use `/precision-router feedback on` to show per-turn routing decisions and
+`/precision-router feedback off` to hide them. This overrides `notifyDecisions`
+for the current session without changing your config or pausing routing.
+A new session or extension reload restores the config default.
+
 The router applies Jev's chosen model and effort without confidence thresholds.
 Only configured, available models can be selected. Missing configuration, invalid
 responses, or a Jev timeout leave your current settings unchanged.
