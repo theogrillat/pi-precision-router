@@ -13,12 +13,16 @@
   "files": [
     "src",
     "examples",
+    "skills",
     "README.md",
     "LICENSE"
   ],
   "pi": {
     "extensions": [
       "./src/index.ts"
+    ],
+    "skills": [
+      "./skills"
     ]
   },
   "scripts": {

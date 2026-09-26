@@ -7,18 +7,23 @@ each agent step, including follow-ups after tool calls.
 
 Requires Pi 0.87.1+ and Node 22.19+.
 
-1. Install dependencies: `npm ci --ignore-scripts`.
-2. Copy [the example config](examples/pi-precision-router.json) to
-   `~/.pi/agent/pi-precision-router.json`.
-3. Replace the placeholder models with models available in `pi --list-models`.
-   Describe their strengths and map each effort label to a supported thinking level.
-4. Export `TYPESAFE_API_KEY` in your shell, then launch from this repo:
+```sh
+pi install git:github.com/theogrillat/pi-precision-router
+```
 
-   ```sh
-   pi --no-extensions --extension "$PWD/src/index.ts"
-   ```
+Export `TYPESAFE_API_KEY` in your shell, start Pi, then run:
 
-This command disables auto-discovered extensions. Run only one model router at a time.
+```text
+/skill:precision-router-setup
+```
+
+The agent discovers available providers and models, helps choose your model/effort
+roster, and asks before saving a global or project config. If Pi is already running,
+use `/reload` to discover the installed skill.
+
+Prefer manual setup? Copy [the example config](examples/pi-precision-router.json)
+to `~/.pi/agent/pi-precision-router.json` and replace the placeholders.
+Run only one model router at a time.
 
 ## Configuration
 
