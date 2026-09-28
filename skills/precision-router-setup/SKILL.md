@@ -38,6 +38,7 @@ Read `../../src/config.ts` for the current validation rules and
   A missing key does not prevent drafting the config. Tell the user to export
   it privately and restart Pi from that environment; changing a child shell
   cannot update the running Pi process.
+
 - Inspect existing global and project router configs, if present. The global
   path is `${PI_CODING_AGENT_DIR}/pi-precision-router.json` when set, otherwise
   `~/.pi/agent/pi-precision-router.json`; the project path is

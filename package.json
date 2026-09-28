@@ -1,8 +1,11 @@
 {
   "name": "pi-precision-router",
   "version": "0.1.0",
-  "private": true,
   "description": "Quality-first, concrete-model routing before every Pi model step",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/theogrillat/pi-precision-router.git"
+  },
   "license": "MIT",
   "type": "module",
   "keywords": [
@@ -26,8 +29,14 @@
     ]
   },
   "scripts": {
+    "check": "tsc --noEmit && prettier --check . && npm test",
     "test": "tsx --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "format:check": "prettier --check .",
+    "format": "prettier --write ."
+  },
+  "engines": {
+    "node": ">=22.19.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.87.1",

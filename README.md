@@ -1,84 +1,105 @@
-# pi-precision-router
+<a id="top"></a>
 
-A Pi extension that uses TypeSafe Jev to choose a model and thinking level before
-each agent step, including follow-ups after tool calls.
+<div align="center">
 
-## Setup
+# 🎯 Pi Precision Router
 
-Requires Pi 0.87.1+ and Node 22.19+.
+**Per-step model and thinking-level routing for [Pi](https://pi.dev/docs/extensions), powered by TypeSafe Jev.**
+
+[![CI](https://github.com/theogrillat/pi-precision-router/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/theogrillat/pi-precision-router/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/pi-precision-router)](https://www.npmjs.com/package/pi-precision-router)
+[![npm downloads](https://img.shields.io/npm/dm/pi-precision-router)](https://www.npmjs.com/package/pi-precision-router)
+[![Node](https://img.shields.io/node/v/pi-precision-router)](package.json)
+[![TypeScript](https://img.shields.io/badge/types-TypeScript-3178c6)](tsconfig.json)
+[![License](https://img.shields.io/npm/l/pi-precision-router)](LICENSE)
+
+[**Why**](#-why) · [**Install**](#-install) · [**Use**](#-use) · [**How it works**](#-how-it-works)
+
+</div>
+
+---
+
+## 🤔 Why
+
+> **One model and one thinking level rarely fit every step of a session.**
+> Hard reasoning deserves your strongest model; routine follow-ups after tool calls do not.
+
+This extension asks TypeSafe Jev to choose a model and thinking level before each agent step, including follow-ups after tool calls. You define the candidates and your priorities; Jev picks among them.
+
+---
+
+## 📦 Install
+
+Install the published [npm package](https://www.npmjs.com/package/pi-precision-router). Requires Pi 0.87.1+ and Node 22.19+.
 
 ```sh
-pi install git:github.com/theogrillat/pi-precision-router
+pi install npm:pi-precision-router
 ```
 
-Export `TYPESAFE_API_KEY` in your shell, start Pi, then run:
+🔑 Export your TypeSafe API key, start Pi, then run the setup skill:
+
+```sh
+export TYPESAFE_API_KEY="your-api-key"
+```
 
 ```text
 /skill:precision-router-setup
 ```
 
-The agent discovers available providers and models, helps choose your model/effort
-roster, and asks before saving a global or project config. If Pi is already running,
-use `/reload` to discover the installed skill.
+The agent discovers available providers and models, helps choose your model/effort roster, and asks before saving a global or project config. If Pi is already running, use `/reload` to discover the installed skill.
 
-Prefer manual setup? Copy [the example config](examples/pi-precision-router.json)
-to `~/.pi/agent/pi-precision-router.json` and replace the placeholders.
-Run only one model router at a time.
+Prefer manual setup? Copy [the example config](examples/pi-precision-router.json) to `~/.pi/agent/pi-precision-router.json` and replace the placeholders.
 
-## Configuration
+> [!NOTE]
+> Authentication uses **only `TYPESAFE_API_KEY`**. Remove `apiKey` and `apiKeyEnv` from older configs; neither is accepted. Run only one model router at a time.
+
+---
+
+## 🧭 Use
+
+Routing starts enabled. Manual model selection does not pause routing.
+
+| Command                          | Action                           |
+| -------------------------------- | -------------------------------- |
+| `/precision-router off`          | Pause routing.                   |
+| `/precision-router on`           | Resume routing.                  |
+| `/precision-router feedback on`  | Show per-turn routing decisions. |
+| `/precision-router feedback off` | Hide per-turn routing decisions. |
+
+Feedback commands override `notifyDecisions` for the current session without changing your config or pausing routing. A new session or extension reload restores the config default.
 
 There are no built-in model choices. Your config defines:
 
-| Field | Purpose |
-| --- | --- |
-| `models` | Provider, model ID, description, and `effortMap` for each candidate. |
-| `efforts` | Effort labels and descriptions Jev chooses between. |
-| `preferences` | Your routing priorities. |
-| `jevModel` | TypeSafe evaluator model; defaults to `jev-latest`. |
-| `notifyDecisions` | Show a notification for every routing attempt; defaults to `false`. |
+| Field             | Purpose                                                              |
+| ----------------- | -------------------------------------------------------------------- |
+| `models`          | Provider, model ID, description, and `effortMap` for each candidate. |
+| `efforts`         | Effort labels and descriptions Jev chooses between.                  |
+| `preferences`     | Your routing priorities.                                             |
+| `jevModel`        | TypeSafe evaluator model; defaults to `jev-latest`.                  |
+| `notifyDecisions` | Show a notification for every routing attempt; defaults to `false`.  |
 
-Each model's `effortMap` must cover every effort label and use thinking levels that
-model supports: `off`, `minimal`, `low`, `medium`, `high`, or `xhigh`. For models
-without reasoning, map every label to `off`.
+Each model's `effortMap` must cover every effort label and use thinking levels that model supports: `off`, `minimal`, `low`, `medium`, `high`, or `xhigh`. For models without reasoning, map every label to `off`.
 
-Project settings in `.pi/pi-precision-router.json` override global settings.
-Arrays and objects are replaced, not merged. Config is reread each turn.
-`PI_CODING_AGENT_DIR` overrides the global config directory.
+> [!TIP]
+> Project settings in `.pi/pi-precision-router.json` override global settings. Arrays and objects are replaced, not merged. Config is reread each turn. `PI_CODING_AGENT_DIR` overrides the global config directory.
 
-Authentication uses **only `TYPESAFE_API_KEY`**. Remove `apiKey` and `apiKeyEnv`
-from older configs; neither is accepted.
+---
 
-## Usage
+## 🔍 How it works
 
-Routing starts enabled. Use `/precision-router off` to pause and
-`/precision-router on` to resume. Manual model selection does not pause routing.
+Before each agent step, the router sends Jev a routing request and applies the chosen model and effort without confidence thresholds. Only configured, available models can be selected. Missing configuration, invalid responses, or a Jev timeout leave your current settings unchanged.
 
-Use `/precision-router feedback on` to show per-turn routing decisions and
-`/precision-router feedback off` to hide them. This overrides `notifyDecisions`
-for the current session without changing your config or pausing routing.
-A new session or extension reload restores the config default.
+Jev requests have a two-second timeout and no retries. An already-started Pi model switch can take longer and cannot be cancelled by the extension.
 
-The router applies Jev's chosen model and effort without confidence thresholds.
-Only configured, available models can be selected. Missing configuration, invalid
-responses, or a Jev timeout leave your current settings unchanged.
+Each routing request sends TypeSafe excerpts of your current request, recent messages (including tool results), system/project instructions, model descriptions, and preferences. Images and reasoning blocks are excluded.
 
-Jev requests have a two-second timeout and no retries. An already-started Pi model
-switch can take longer and cannot be cancelled by the extension.
+> [!WARNING]
+> **These excerpts may contain private code or instructions.** Use this extension only where sending that content to TypeSafe is acceptable.
 
-## Privacy
+<div align="center">
 
-Each routing request sends TypeSafe excerpts of your current request, recent
-messages (including tool results), system/project instructions, model descriptions,
-and preferences. Images and reasoning blocks are excluded.
+<sub>Released under the [MIT License](LICENSE) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)</sub>
 
-**These excerpts may contain private code or instructions.** Use this extension
-only where sending that content to TypeSafe is acceptable.
+<a href="#top">⬆ Back to top</a>
 
-## Development
-
-```sh
-npm run typecheck
-npm test
-```
-
-Tests use controlled Jev and provider responses, not paid live inference.
+</div>

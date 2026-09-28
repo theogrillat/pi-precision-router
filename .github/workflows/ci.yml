@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.x
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck, format, and test
+        run: npm run check
+
+  publish:
+    needs: check
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'theogrillat/pi-precision-router'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.x
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Select next patch release unless this commit is already published
+        id: release
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs';
+
+          const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
+          const { name } = manifest;
+          const sha = process.env.GITHUB_SHA;
+          const output = process.env.GITHUB_OUTPUT;
+          if (!sha) throw new Error('GITHUB_SHA is required');
+          const url = `https://registry.npmjs.org/${encodeURIComponent(name)}`;
+          const response = await fetch(url, {
+            signal: AbortSignal.timeout(30_000),
+          });
+          if (response.status === 404) {
+            // First release: publish the checked-in manifest version.
+            appendFileSync(
+              output,
+              `publish=true\nversion=${manifest.version}\n`,
+            );
+            console.log(`First release of ${name}@${manifest.version}`);
+            process.exit(0);
+          }
+          if (!response.ok) {
+            throw new Error(`Registry lookup failed: HTTP ${response.status}`);
+          }
+          const metadata = await response.json();
+          if (metadata.name !== name || !metadata.versions) {
+            throw new Error('Registry returned unexpected package metadata');
+          }
+          const published = Object.values(metadata.versions).find(
+            (version) => version.gitHead === sha,
+          );
+          if (published) {
+            appendFileSync(output, 'publish=false\n');
+            console.log(
+              `${sha} already published as ` +
+                `${name}@${published.version}; skipping publication`,
+            );
+          } else {
+            const latest = metadata['dist-tags']?.latest;
+            const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(latest);
+            if (!match || !metadata.versions[latest]) {
+              throw new Error(
+                'Registry latest must identify a stable published version',
+              );
+            }
+            const version = `${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
+            if (metadata.versions[version]) {
+              throw new Error(
+                `Next patch version ${version} already exists; ` +
+                  'check the npm latest tag',
+              );
+            }
+            appendFileSync(output, `publish=true\nversion=${version}\n`);
+            console.log(`Publishing ${name}@${version} from ${sha}`);
+          }
+          NODE
+      - name: Install pinned npm CLI with trusted publishing support
+        if: steps.release.outputs.publish == 'true'
+        run: >-
+          npm install --global npm@12.1.0
+          --ignore-scripts --no-audit --no-fund
+      - name: Bump package and lockfile versions for publication
+        if: steps.release.outputs.publish == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: >-
+          npm version "$RELEASE_VERSION"
+          --no-git-tag-version --allow-same-version --ignore-scripts
+      - name: Publish to npm using OIDC and provenance
+        if: steps.release.outputs.publish == 'true'
+        run: npm publish --access public --provenance --ignore-scripts
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # yamllint disable-line rule:line-length
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294
