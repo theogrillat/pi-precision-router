@@ -50,9 +50,6 @@ The agent discovers available providers and models, helps choose your model/effo
 
 Prefer manual setup? Copy [the example config](examples/pi-precision-router.json) to `~/.pi/agent/pi-precision-router.json` and replace the placeholders.
 
-> [!NOTE]
-> Authentication uses **only `TYPESAFE_API_KEY`**. Remove `apiKey` and `apiKeyEnv` from older configs; neither is accepted. Run only one model router at a time.
-
 ---
 
 ## 🧭 Use
