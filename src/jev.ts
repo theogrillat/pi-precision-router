@@ -7,7 +7,7 @@ export function excerpt(text: string, limit: number): string {
     ? text
     : `${text.slice(0, Math.floor((limit - 20) / 2))}\n[…truncated…]\n${text.slice(-Math.floor((limit - 20) / 2))}`;
 }
-function text(content: unknown): string {
+export function text(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
