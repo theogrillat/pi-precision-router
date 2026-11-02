@@ -5,7 +5,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { loadConfig, modelKey } from "./config.ts";
 import { mappedEffort } from "./effort.ts";
-import { buildRequest, evaluate, excerpt, parseDecision } from "./jev.ts";
+import { buildRequest, evaluate, excerpt, parseDecision, text } from "./jev.ts";
 
 export default function precisionRouter(pi: ExtensionAPI): void {
   let enabled = true;
@@ -41,7 +41,15 @@ export default function precisionRouter(pi: ExtensionAPI): void {
     status(ctx);
   });
   pi.on("before_agent_start", (event) => {
-    activeRequest = excerpt(event.prompt, 2000);
+    // Runs started by pi.sendMessage(..., { triggerTurn: true }) carry a custom
+    // message instead of a prompt (newer Pi: messageType "custom").
+    const { prompt, message } = event as {
+      prompt?: unknown;
+      message?: { content?: unknown };
+    };
+    const request =
+      typeof prompt === "string" ? prompt : text(message?.content);
+    activeRequest = excerpt(request, 2000);
   });
   pi.on("session_shutdown", () => {
     invalidate();

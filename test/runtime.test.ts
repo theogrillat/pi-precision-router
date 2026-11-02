@@ -118,8 +118,8 @@ async function harness(t: any, available = [opus, astra]) {
     },
   };
   router(pi as unknown as ExtensionAPI);
-  const emit = (event: string) =>
-    handlers.get(event)?.({}, ctx as unknown as ExtensionContext);
+  const emit = (event: string, payload: unknown = {}) =>
+    handlers.get(event)?.(payload, ctx as unknown as ExtensionContext);
   await emit("session_start");
   return {
     pi,
@@ -630,4 +630,18 @@ test("unsupported configured native effort cannot switch model or silently remap
   await h.emit("turn_start");
   assert.deepEqual(h.settings(), ["claude-opus-5-5", "high"]);
   assert.match(h.warnings.at(-1)!, /mapping low → off is unsupported/);
+});
+
+test("runs started by a custom message, without a prompt, use its text as the request", async (t) => {
+  const h = await harness(t);
+  h.messages.length = 0;
+  await h.emit("before_agent_start", {
+    messageType: "custom",
+    message: { content: [{ type: "text", text: "Sub-agent finished" }] },
+  });
+  await h.emit("turn_start");
+  assert.equal(h.requests[0].state.current_request, "Sub-agent finished");
+  await h.emit("before_agent_start", { messageType: "custom", message: {} });
+  await h.emit("turn_start");
+  assert.equal(h.requests[1].state.current_request, "");
 });
